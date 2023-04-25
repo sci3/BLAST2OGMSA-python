@@ -1,0 +1,50 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+my ($help, $genome, $RNA, $tree);
+
+GetOptions(
+    "help|h|H|hlep|HLEP" => \$help,
+    "genome|G|g" => \$genome,
+    "RNA|R|r" => \$RNA,
+    "tree|T|t" => \$tree
+);
+
+if ($help) {
+    print "Usage:\n";
+    print "  perl run_scripts.pl [options]\n";
+    print "\n";
+    print "Options:\n";
+    print "  -h, -H, -hlep, -HLEP, --help  Print this help message\n";
+    print "  -G, --genome                  Run the genome script\n";
+    print "  -R, --RNA                     Run the RNA script\n";
+    print "  -T, --tree                    Run the tree script\n";
+} elsif ($genome) {
+    # Run the genome script
+    for my $i (`less genome_list`) {
+        chomp $i;
+        `/vol3/agis/yanjianbin_group/luanxinxin/miniconda3/envs/miniprot/bin/miniprot -ut16 --gff /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/00-genome/00-index/$i /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/00-genome/$i | grep -v \"#\" | awk -F ' ' '{print \$1\"\\t\"\$2\"\\t\"\$3\"\\t\"\$4\"\\t\"\$5\"\\t\"\$6\"\\t\"\$7\"\\t\"\$8\"\\t\"\$9}' > /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/.tmp/$i`;
+        `/vol3/agis/yanjianbin_group/wanghuan/software/gffread-0.12.7.Linux_x86_64/gffread /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/.tmp/$i -g /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/00-genome/$i -x /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/00-genome_out/01-uncl/$i -y /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/00-genome_out/02-pro/$i`;
+    }
+    `/vol3/agis/yanjianbin_group/luanxinxin/miniconda3/bin/python /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/rename-fasta.py /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/00-genome_out/02-pro`;
+	`/vol3/agis/yanjianbin_group/luanxinxin/miniconda3/bin/python /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/rename-fasta.py /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/00-genome_out/01-uncl`;
+
+  elsif ($RNA) {
+    # Run the genome script
+    for my $i (`less genome_list`) {
+        chomp $i;
+        `/vol3/agis/yanjianbin_group/luanxinxin/miniconda3/envs/miniprot/bin/miniprot  -ut16 --gff /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/01-RNA/00-index/${i} /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/01-RNA/02-redup-uncl/$i | grep -v "#" |awk -F ' ' '{print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7"\t"$8"\t"$9}' >/vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/.tmp/$i`;
+        `/vol3/agis/yanjianbin_group/wanghuan/software/gffread-0.12.7.Linux_x86_64/gffread /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/.tmp/${i} -g /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/01-RNA/02-redup-uncl/${i} -x /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/01-RNA_out/01-uncl/${i} -y /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/01-RNA_out/02-pro/$i`;
+    }
+    `/vol3/agis/yanjianbin_group/luanxinxin/miniconda3/bin/python /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/rename-fasta.py /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/01-RNA_out/02-pro`;
+	`/vol3/agis/yanjianbin_group/luanxinxin/miniconda3/bin/python /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/rename-fasta.py /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/01-RNA_out/01-uncl`;
+
+  elsif ($tree) 
+        `cat /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/01-RNA_out/02-pro/* /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/00-genome_out/02-pro/* >>/vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/02-tree/all.fa`;
+        `conda activate /vol3/agis/yanjianbin_group/luanxinxin/miniconda3/envs/Phylogenetic-tree`;
+		`cd /vol3/agis/yanjianbin_group/luanxinxin/07-gymnosperm/02-out/02-tree`;
+		`seqkit seq -m 200 all.fa > tree.fa`;
+		`jianshu.sh tree.fa`;
