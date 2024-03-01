@@ -1,177 +1,75 @@
+# 导入一些python的内置模块和第三方模块
 import sys
+import argparse
+import csv
+import statistics
 
-USAGE = "\nusage: python BLAST2OGMSA.py -method=[Gblocks|trimAl|BMGE|noisy] <file.aln> <seqdump.txt> <output.fasta>\n"
+# 定义一个函数，用于读取输入文件的内容，返回一个列表
+def read_input_file(input_file):
+    data = []
+    with open(input_file, "r") as f:
+        reader = csv.reader(f, delimiter="\t")
+        for row in reader:
+            data.append(row)
+    return data
 
-method = ''
-aln = sys.argv[1]
-seqdump = sys.argv[2]
-out = sys.argv[3]
+# 定义一个函数，用于处理输入数据，返回一个字典
+def process_input_data(data):
+    output = {}
+    for row in data:
+        # 提取各个字段的值
+        sample = row[0]
+        gene = row[1]
+        expression = float(row[2])
+        # 根据一些条件进行筛选和计算
+        if sample.startswith("Tumor"):
+            if gene not in output:
+                output[gene] = []
+            output[gene].append(expression)
+    return output
 
-for paras in sys.argv:
-    if '-help' in paras or '-h' in paras:
-        print(USAGE)
-        sys.exit()
-    elif 'method' in paras:
-        method = paras.split('=')[1]
+# 定义一个函数，用于输出结果，打印到标准输出或者指定的输出文件中
+def output_result(output, output_file=None):
+    # 如果有指定输出文件，就打开它，否则就使用标准输出
+    if output_file:
+        f = open(output_file, "w")
+    else:
+        f = sys.stdout
+    # 输出表头
+    print("Gene\tMean\tMedian\tMin\tMax", file=f)
+    # 对输出数据按照基因名字排序
+    sorted_output = sorted(output.items(), key=lambda x: x[0])
+    # 输出每一行的数据
+    for gene, values in sorted_output:
+        mean = statistics.mean(values)
+        median = statistics.median(values)
+        min_value = min(values)
+        max_value = max(values)
+        print(f"{gene}\t{mean:.2f}\t{median:.2f}\t{min_value:.2f}\t{max_value:.2f}", file=f)
+    # 如果有指定输出文件，就关闭它
+    if output_file:
+        f.close()
 
-if not aln:
-    print(USAGE)
-    print("Please provide the raw blast alignment file download from MSA viewer!\n")
-    sys.exit()
-if not seqdump:
-    print(USAGE)
-    print("Please provide the raw sequence file download from blastn results.\n")
-    sys.exit()
-if not out:
-    print(USAGE)
-    print("Please provide the name of output file.\n")
-    sys.exit()
-##############################################################################
-list = []
-with open(seqdump, "r") as file:
-    for line in file:
-        if line.startswith(">"):
-            y = line[1:].split("|")
-            if len(y) > 2:
-                w = y[1].split()
-            else:
-                w = y[0].split()
-            id = f"{w[0]}-{w[1]}-{w[2]}-{w[3]}"
-            list.append(id)
-############################################################################
-seq = {}
-seq_number = 0
+# 定义一个函数，用于解析命令行选项，返回一个命名空间对象
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="ORPA: a tool for analyzing gene expression data")
+    parser.add_argument("input_file", help="the path to the input file")
+    parser.add_argument("-o", "--output_file", help="the path to the output file (default: stdout)")
+    parser.add_argument("-v", "--version", action="version", version="ORPA 1.0")
+    args = parser.parse_args()
+    return args
 
-with open(aln, "r") as infile:
-    for line in infile:
-        line = line.rstrip()
-        if line.startswith(">"):
-            seq_number = 0
-            sid = line[1:]
-            w = sid.split("|")
-            sid = w[1]
-        else:
-            seq_number += 1
-            compare_number2 = len(re.findall("\w", line))
-            if sid not in seq:
-                seq[sid] = [""] * seq_number + [line]
-            else:
-                compare_number1 = len(re.findall("\w", seq[sid][seq_number-1]))
-                if compare_number2 >= compare_number1:
-                    seq[sid][seq_number-1] = line
+# 主程序
+def main():
+    # 解析命令行选项
+    args = parse_arguments()
+    # 读取输入文件
+    data = read_input_file(args.input_file)
+    # 处理输入数据
+    output = process_input_data(data)
+    # 输出结果
+    output_result(output, args.output_file)
 
-with open(aln + ".temp", "w") as outfile:
-    for sid, sequences in seq.items():
-        outfile.write(">" + sid + "\n")
-        for outseq in sequences:
-            outfile.write(outseq + "\n")
-##############################################################################
-import os
-import glob
-
-trimed = glob.glob("*.temp")
-for trimed_file in trimed:
-    if method == "Gblocks":
-        os.system(f"./bin/Gblocks {trimed_file} out")
-    if method == "trimAl":
-        os.system(f"./bin/trimal -in {trimed_file} -out {trimed_file}-gb -fasta -htmlout {trimed_file}.html -automated1")
-    if method == "BMGE":
-        os.system(f"java -jar ./bin/BMGE.jar -i {trimed_file} -t DNA -s YES -of {trimed_file}-gb -oh {trimed_file}.html")
-    if method == "noisy":
-        os.system(f"./bin/noisy {trimed_file}")
-    os.unlink(trimed_file)
-########################################################################
-import glob
-import os
-
-trimed = glob.glob("*.temp")
-
-for trimed_file in trimed:
-    if method == "Gblocks":
-        gb_files = glob.glob("*.temp-gb")
-        for gb_file in gb_files:
-            delete = 0
-            with open(gb_file, 'r') as gb, open(gb_file+'.out', 'w') as gbout:
-                for line in gb:
-                    if line.startswith('>'):
-                        gbout.write(line)
-                    elif line[0:10].isalnum():
-                        delete += 1
-                        gbout.write(line.replace(" ", ""))
-            os.remove(gb_file)
-            if delete == 0:
-                os.remove(gb_file+'.out')
-            temp_name2 = gb_file+'.out'
-            temp_name2 = temp_name2.replace('temp-gb.out', 'fasta')
-            os.rename(gb_file+'.out', temp_name2)
-            
-    elif method == "trimAl":
-        gb_files = glob.glob("*.temp-gb")
-        for gb_file in gb_files:
-            delete = 0
-            with open(gb_file, 'r') as gb, open(gb_file+'.out', 'w') as gbout:
-                for line in gb:
-                    if line.startswith('>'):
-                        gbout.write(line)
-                    elif line.replace('-', '').strip().isalpha():
-                        delete += 1
-                        gbout.write(line)
-            os.remove(gb_file)
-            if delete == 0:
-                os.remove(gb_file+'.out')
-            temp_name2 = gb_file.replace('temp-gb', 'fasta')
-            os.rename(gb_file+'.out', temp_name2)
-    
-    elif method == "BMGE":
-        gb_files = glob.glob("*.temp-gb")
-        for gb_file in gb_files:
-            delete = 0
-            with open(gb_file, 'r') as gb, open(gb_file+'.out', 'w') as gbout:
-                for line in gb:
-                    if line.startswith('>'):
-                        gbout.write(line)
-                    elif line.replace('-', '').strip().isalpha():
-                        delete += 1
-                        gbout.write(line)
-            os.remove(gb_file)
-            if delete == 0:
-                os.remove(gb_file+'.out')
-            temp_name2 = gb_file.replace('temp-gb', 'fasta')
-            os.rename(gb_file+'.out', temp_name2)
-    
-    elif method == "noisy":
-        gb_files = glob.glob("*.fas")
-        for gb_file in gb_files:
-            delete = 0
-            with open(gb_file, 'r') as gb, open(gb_file+'.out', 'w') as gbout:
-                for line in gb:
-                    if line.startswith('>'):
-                        gbout.write(line.replace(" ", ""))
-                    elif line.replace('-', '').strip().isalpha():
-                        delete += 1
-                        gbout.write(line)
-            os.remove(gb_file)
-            if delete == 0:
-                os.remove(gb_file+'.out')
-            temp_name2 = gb_file.replace('_out.fas', '.fasta')
-            os.rename(gb_file+'.out', temp_name2)
-####################################################
-seq2 = {}
-sid2 = ""
-with open(aln.fasta) as INI:
-    for line in INI:
-        if line.startswith(">"):
-            sid2 = line.strip()[1:]
-        else:
-            seq2[sid2] = seq2.get(sid2, "") + line.strip()
-
-query = list(seq2.keys())
-end_name = ""
-with open(out, "w") as OUT:
-    for id in list:
-        new = id.split("-")
-        if "Query" in new[0]:
-            OUT.write(f">{new[1]}_{new[2]}_{new[3]}\n")
-        else:
-            OUT.write(f">{new[0]}_{new[1]}_{new[2]}\n")
-        OUT.write(seq2.get(new[0], "") + "\n")
+# 如果是直接运行这个脚本，就调用主程序
+if __name__ == "__main__":
+    main()
